@@ -1,0 +1,468 @@
+{% extends "base.html" %}
+
+{% block title %}Stock Analysis - Trading App{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-search me-2"></i>Stock Analysis
+                </h5>
+            </div>
+            <div class="card-body">
+                <form id="analysisForm">
+                    <div class="mb-3">
+                        <label for="stockSymbol" class="form-label">Stock Symbol</label>
+                        <input type="text" class="form-control" id="stockSymbol" placeholder="e.g., RELIANCE, TCS, INFY" required>
+                        <div class="form-text">Enter NSE stock symbol (without .NS suffix)</div>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100" id="analyzeBtn">
+                        <i class="fas fa-chart-line me-2"></i>Analyze Stock
+                    </button>
+                </form>
+
+                <!-- API Status -->
+                <div class="mt-4">
+                    <h6>System Status</h6>
+                    <div id="apiStatus">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span>Kite API:</span>
+                            <span class="badge bg-secondary" id="kiteStatus">Checking...</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span>Portfolio:</span>
+                            <span class="badge bg-secondary" id="portfolioStatus">Checking...</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span>AI Analysis:</span>
+                            <span class="badge bg-secondary" id="aiStatus">Checking...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-8">
+        <!-- Loading Spinner -->
+        <div id="loadingSpinner" class="text-center py-5" style="display: none;">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-3">Analyzing stock... Please wait</p>
+        </div>
+
+        <!-- Results Area -->
+        <div id="resultsArea" style="display: none;">
+            <!-- Stock Overview -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0" id="stockTitle">Stock Analysis Results</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Current Price</h6>
+                            <h3 class="text-primary" id="currentPrice">₹0.00</h3>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>AI Recommendation</h6>
+                            <h4 id="recommendation">
+                                <span class="badge bg-secondary">Analyzing...</span>
+                            </h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Technical Analysis -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-chart-area me-2"></i>Technical Analysis
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row" id="technicalIndicators">
+                        <!-- Technical indicators will be populated here -->
+                    </div>
+                    <div class="mt-3">
+                        <h6>Technical Signals</h6>
+                        <div id="technicalSignals" class="d-flex flex-wrap gap-2">
+                            <!-- Signals will be populated here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Fundamental Analysis -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-building me-2"></i>Fundamental Analysis
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row" id="fundamentalData">
+                        <!-- Fundamental data will be populated here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Risk & Position Management -->
+            <div class="card mb-4" id="riskManagement" style="display: none;">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-shield-alt me-2"></i>Risk & Position Management
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Risk-Reward Analysis</h6>
+                            <div id="riskRewardData">
+                                <!-- Risk-reward data will be populated here -->
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Position Recommendation</h6>
+                            <div id="positionRecommendation">
+                                <!-- Position recommendation will be populated here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI Analysis Details -->
+            <div class="card mb-4" id="aiAnalysisCard" style="display: none;">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-robot me-2"></i>AI Analysis Details
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div id="aiAnalysisDetails">
+                        <!-- AI analysis will be populated here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Error Display -->
+        <div id="errorDisplay" class="alert alert-danger" style="display: none;" role="alert">
+            <h5 class="alert-heading">Analysis Failed</h5>
+            <p id="errorMessage">An error occurred during analysis.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Check API status on load
+    checkApiStatus();
+    
+    // Check for symbol in URL parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    const symbolParam = urlParams.get('symbol');
+    if (symbolParam) {
+        document.getElementById('stockSymbol').value = symbolParam.toUpperCase();
+        // Auto-analyze if symbol is provided
+        analyzeStock(symbolParam.toUpperCase());
+    }
+
+    // Handle form submission
+    document.getElementById('analysisForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const symbol = document.getElementById('stockSymbol').value.trim().toUpperCase();
+        if (symbol) {
+            analyzeStock(symbol);
+        }
+    });
+});
+
+function checkApiStatus() {
+    fetch('/api/status')
+        .then(response => response.json())
+        .then(data => {
+            updateStatusBadge('kiteStatus', data.kite_connected, 'Kite API');
+            updateStatusBadge('portfolioStatus', data.portfolio_available, 'Portfolio');
+            updateStatusBadge('aiStatus', data.services.ai_analysis, 'AI Analysis');
+        })
+        .catch(error => {
+            console.error('Error checking API status:', error);
+        });
+}
+
+function updateStatusBadge(elementId, isAvailable, service) {
+    const element = document.getElementById(elementId);
+    if (isAvailable) {
+        element.className = 'badge bg-success';
+        element.textContent = 'Connected';
+    } else {
+        element.className = 'badge bg-warning';
+        element.textContent = 'Unavailable';
+    }
+}
+
+function analyzeStock(symbol) {
+    // Show loading spinner
+    document.getElementById('loadingSpinner').style.display = 'block';
+    document.getElementById('resultsArea').style.display = 'none';
+    document.getElementById('errorDisplay').style.display = 'none';
+    document.getElementById('analyzeBtn').disabled = true;
+
+    fetch('/analyze', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({symbol: symbol})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            showError(data.error);
+        } else {
+            displayResults(data);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showError('Network error occurred. Please try again.');
+    })
+    .finally(() => {
+        document.getElementById('loadingSpinner').style.display = 'none';
+        document.getElementById('analyzeBtn').disabled = false;
+    });
+}
+
+function displayResults(data) {
+    document.getElementById('resultsArea').style.display = 'block';
+
+    // Update stock title and price
+    document.getElementById('stockTitle').textContent = `${data.symbol} Analysis Results`;
+    document.getElementById('currentPrice').textContent = `₹${data.current_price.toFixed(2)}`;
+
+    // Update recommendation
+    const recommendation = data.buying_analysis;
+    if (recommendation && recommendation.should_buy !== undefined) {
+        const recElement = document.getElementById('recommendation');
+        const badgeClass = recommendation.should_buy ? 'bg-success' : 'bg-danger';
+        const recText = recommendation.should_buy ? 'BUY' : 'HOLD/AVOID';
+        recElement.innerHTML = `<span class="badge ${badgeClass}">${recText}</span>`;
+
+        if (recommendation.confidence_level) {
+            recElement.innerHTML += ` <small class="text-muted">(${recommendation.confidence_level} confidence)</small>`;
+        }
+    }
+
+    // Display technical analysis
+    displayTechnicalAnalysis(data.technical_analysis);
+
+    // Display fundamental analysis
+    displayFundamentalAnalysis(data.fundamental_analysis);
+
+    // Display risk management if available
+    if (data.risk_reward || data.position_recommendation) {
+        displayRiskManagement(data.risk_reward, data.position_recommendation);
+    }
+
+    // Display AI analysis details
+    if (data.buying_analysis && (data.buying_analysis.ai_available || data.buying_analysis.key_reasons)) {
+        displayAIAnalysis(data.buying_analysis);
+    }
+}
+
+function displayTechnicalAnalysis(technical) {
+    if (!technical || technical.error) {
+        document.getElementById('technicalIndicators').innerHTML = '<p class="text-muted">Technical analysis not available</p>';
+        return;
+    }
+
+    const indicators = document.getElementById('technicalIndicators');
+    indicators.innerHTML = '';
+
+    // Key indicators
+    const indicatorData = [
+        {name: 'RSI', value: technical.rsi, format: (v) => v ? v.toFixed(2) : 'N/A'},
+        {name: 'MACD', value: technical.macd?.macd, format: (v) => v ? v.toFixed(4) : 'N/A'},
+        {name: 'Volatility', value: technical.volatility, format: (v) => v ? (v * 100).toFixed(2) + '%' : 'N/A'},
+        {name: 'Sentiment', value: technical.overall_sentiment, format: (v) => v || 'Unknown'}
+    ];
+
+    indicatorData.forEach(indicator => {
+        const col = document.createElement('div');
+        col.className = 'col-md-3 mb-3';
+        col.innerHTML = `
+            <div class="text-center">
+                <h6 class="text-muted mb-1">${indicator.name}</h6>
+                <div class="h5">${indicator.format(indicator.value)}</div>
+            </div>
+        `;
+        indicators.appendChild(col);
+    });
+
+    // Technical signals
+    const signalsContainer = document.getElementById('technicalSignals');
+    signalsContainer.innerHTML = '';
+
+    if (technical.signals) {
+        Object.entries(technical.signals).forEach(([key, signal]) => {
+            const badge = document.createElement('span');
+            const badgeClass = signal === 'BUY' ? 'bg-success' : signal === 'SELL' ? 'bg-danger' : 'bg-secondary';
+            badge.className = `badge ${badgeClass}`;
+            badge.textContent = `${key.replace('_', ' ').toUpperCase()}: ${signal}`;
+            signalsContainer.appendChild(badge);
+        });
+    }
+}
+
+function displayFundamentalAnalysis(fundamental) {
+    if (!fundamental || fundamental.error) {
+        document.getElementById('fundamentalData').innerHTML = '<p class="text-muted">Fundamental analysis not available</p>';
+        return;
+    }
+
+    const container = document.getElementById('fundamentalData');
+    container.innerHTML = '';
+
+    // Key ratios
+    const ratios = fundamental.financial_ratios || {};
+    const ratioData = [
+        {name: 'P/E Ratio', value: ratios.pe_ratio, format: (v) => v ? v.toFixed(2) : 'N/A'},
+        {name: 'P/B Ratio', value: ratios.pb_ratio, format: (v) => v ? v.toFixed(2) : 'N/A'},
+        {name: 'ROE', value: ratios.roe, format: (v) => v ? (v * 100).toFixed(2) + '%' : 'N/A'},
+        {name: 'Debt/Equity', value: ratios.debt_to_equity, format: (v) => v ? v.toFixed(2) : 'N/A'}
+    ];
+
+    ratioData.forEach(ratio => {
+        const col = document.createElement('div');
+        col.className = 'col-md-3 mb-3';
+        col.innerHTML = `
+            <div class="text-center">
+                <h6 class="text-muted mb-1">${ratio.name}</h6>
+                <div class="h6">${ratio.format(ratio.value)}</div>
+            </div>
+        `;
+        container.appendChild(col);
+    });
+
+    // Fundamental score
+    if (fundamental.fundamental_score) {
+        const scoreCol = document.createElement('div');
+        scoreCol.className = 'col-12 mt-3';
+        const score = fundamental.fundamental_score.score || 0;
+        const rating = fundamental.fundamental_score.rating || 'Unknown';
+        const scoreClass = score >= 70 ? 'success' : score >= 50 ? 'warning' : 'danger';
+
+        scoreCol.innerHTML = `
+            <div class="text-center">
+                <h6>Fundamental Strength Score</h6>
+                <div class="progress mb-2">
+                    <div class="progress-bar bg-${scoreClass}" style="width: ${score}%"></div>
+                </div>
+                <span class="badge bg-${scoreClass}">${score}/100 - ${rating}</span>
+            </div>
+        `;
+        container.appendChild(scoreCol);
+    }
+}
+
+function displayRiskManagement(riskReward, positionRec) {
+    document.getElementById('riskManagement').style.display = 'block';
+
+    const riskContainer = document.getElementById('riskRewardData');
+    const positionContainer = document.getElementById('positionRecommendation');
+
+    if (riskReward) {
+        riskContainer.innerHTML = `
+            <div class="mb-2"><strong>Target Price:</strong> ₹${riskReward.target_price.toFixed(2)}</div>
+            <div class="mb-2"><strong>Stop Loss:</strong> ₹${riskReward.stop_loss_price.toFixed(2)}</div>
+            <div class="mb-2"><strong>Risk-Reward:</strong> ${riskReward.ratio_formatted}</div>
+            <div class="mb-2"><strong>Breakeven Rate:</strong> ${riskReward.breakeven_win_rate.toFixed(1)}%</div>
+            <div class="mb-2">
+                <span class="badge ${riskReward.is_favorable ? 'bg-success' : 'bg-warning'}">
+                    ${riskReward.is_favorable ? 'Favorable' : 'Below Target'}
+                </span>
+            </div>
+        `;
+    } else {
+        riskContainer.innerHTML = '<p class="text-muted">Risk-reward data not available</p>';
+    }
+
+    if (positionRec) {
+        positionContainer.innerHTML = `
+            <div class="mb-2"><strong>Recommended Shares:</strong> ${positionRec.recommended_shares}</div>
+            <div class="mb-2"><strong>Investment Amount:</strong> ₹${positionRec.total_investment.toFixed(2)}</div>
+            <div class="mb-2"><strong>Max Risk:</strong> ₹${positionRec.total_risk_amount.toFixed(2)}</div>
+            <div class="mb-2"><strong>Potential Profit:</strong> ₹${positionRec.potential_profit.toFixed(2)}</div>
+            <div class="mb-2"><strong>Risk %:</strong> ${positionRec.risk_percentage.toFixed(2)}%</div>
+        `;
+    } else {
+        positionContainer.innerHTML = '<p class="text-muted">Position recommendation not available</p>';
+    }
+}
+
+function displayAIAnalysis(analysis) {
+    document.getElementById('aiAnalysisCard').style.display = 'block';
+
+    const container = document.getElementById('aiAnalysisDetails');
+    container.innerHTML = '';
+
+    if (analysis.summary) {
+        const summaryDiv = document.createElement('div');
+        summaryDiv.className = 'mb-3';
+        summaryDiv.innerHTML = `<h6>Summary</h6><p>${analysis.summary}</p>`;
+        container.appendChild(summaryDiv);
+    }
+
+    if (analysis.key_reasons && analysis.key_reasons.length > 0) {
+        const reasonsDiv = document.createElement('div');
+        reasonsDiv.className = 'mb-3';
+        reasonsDiv.innerHTML = '<h6>Key Reasons</h6><ul class="list-group list-group-flush">';
+        analysis.key_reasons.forEach(reason => {
+            reasonsDiv.innerHTML += `<li class="list-group-item border-0 px-0">${reason}</li>`;
+        });
+        reasonsDiv.innerHTML += '</ul>';
+        container.appendChild(reasonsDiv);
+    }
+
+    if (analysis.risks && analysis.risks.length > 0) {
+        const risksDiv = document.createElement('div');
+        risksDiv.className = 'mb-3';
+        risksDiv.innerHTML = '<h6>Risks to Consider</h6><ul class="list-group list-group-flush">';
+        analysis.risks.forEach(risk => {
+            risksDiv.innerHTML += `<li class="list-group-item border-0 px-0 text-warning">${risk}</li>`;
+        });
+        risksDiv.innerHTML += '</ul>';
+        container.appendChild(risksDiv);
+    }
+
+    if (analysis.overall_score) {
+        const scoreDiv = document.createElement('div');
+        scoreDiv.className = 'text-center mt-3';
+        const score = analysis.overall_score;
+        const scoreClass = score >= 70 ? 'success' : score >= 50 ? 'warning' : 'danger';
+
+        scoreDiv.innerHTML = `
+            <h6>AI Confidence Score</h6>
+            <div class="progress mb-2">
+                <div class="progress-bar bg-${scoreClass}" style="width: ${score}%"></div>
+            </div>
+            <span class="badge bg-${scoreClass}">${score}/100</span>
+        `;
+        container.appendChild(scoreDiv);
+    }
+}
+
+function showError(message) {
+    document.getElementById('errorMessage').textContent = message;
+    document.getElementById('errorDisplay').style.display = 'block';
+}
+</script>
+{% endblock %}

@@ -1,0 +1,348 @@
+{% extends "base.html" %}
+
+{% block title %}Buy Recommendations - Trading App{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h4 class="card-title mb-0">
+                    <i class="fas fa-star me-2"></i>Swing Trading Buy Recommendations
+                </h4>
+            </div>
+            <div class="card-body">
+                <p class="mb-3">Discover stocks with strong technical and fundamental analysis, perfect for swing trading opportunities.</p>
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label for="minScore" class="form-label">Minimum Score</label>
+                        <input type="number" class="form-control" id="minScore" value="60" min="0" max="100">
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label for="maxResults" class="form-label">Max Results</label>
+                        <input type="number" class="form-control" id="maxResults" value="20" min="1" max="50">
+                    </div>
+                    <div class="col-md-4 mb-3 d-flex align-items-end">
+                        <button class="btn btn-primary w-100" id="scanBtn" onclick="scanStocks()">
+                            <i class="fas fa-search me-2"></i>Scan Stocks
+                        </button>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-12">
+                        <label for="customSymbols" class="form-label">Custom Symbols (Optional, comma-separated)</label>
+                        <input type="text" class="form-control" id="customSymbols" placeholder="e.g., RELIANCE, TCS, INFY (leave empty for default scan)">
+                        <small class="form-text text-muted">Leave empty to scan popular stocks automatically</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Spinner -->
+<div id="loadingSpinner" class="text-center py-5" style="display: none;">
+    <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+    <p class="mt-3 h5">Scanning stocks and analyzing opportunities...</p>
+    <p class="text-muted">This may take a few minutes</p>
+</div>
+
+<!-- Results Area -->
+<div id="resultsArea" style="display: none;">
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle me-2"></i>
+                <strong id="resultsCount">0</strong> recommendations found
+                <span class="float-end" id="lastScanned"></span>
+            </div>
+        </div>
+    </div>
+
+    <div id="recommendationsContainer">
+        <!-- Recommendations will be populated here -->
+    </div>
+</div>
+
+<!-- Error Display -->
+<div id="errorDisplay" class="alert alert-danger" style="display: none;" role="alert">
+    <h5 class="alert-heading">Scan Failed</h5>
+    <p id="errorMessage">An error occurred during stock scanning.</p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Auto-scan on page load
+    scanStocks();
+});
+
+function scanStocks() {
+    const minScore = parseInt(document.getElementById('minScore').value) || 60;
+    const maxResults = parseInt(document.getElementById('maxResults').value) || 20;
+    const customSymbols = document.getElementById('customSymbols').value.trim();
+    
+    // Show loading
+    document.getElementById('loadingSpinner').style.display = 'block';
+    document.getElementById('resultsArea').style.display = 'none';
+    document.getElementById('errorDisplay').style.display = 'none';
+    document.getElementById('scanBtn').disabled = true;
+    
+    const payload = {
+        min_score: minScore,
+        max_results: maxResults
+    };
+    
+    if (customSymbols) {
+        payload.symbols = customSymbols.split(',').map(s => s.trim().toUpperCase());
+    }
+    
+    fetch('/api/recommendations', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            showError(data.error);
+        } else {
+            displayRecommendations(data);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showError('Network error occurred. Please try again.');
+    })
+    .finally(() => {
+        document.getElementById('loadingSpinner').style.display = 'none';
+        document.getElementById('scanBtn').disabled = false;
+    });
+}
+
+function displayRecommendations(data) {
+    const recommendations = data.recommendations || [];
+    
+    document.getElementById('resultsCount').textContent = recommendations.length;
+    document.getElementById('lastScanned').textContent = `Last scanned: ${new Date().toLocaleString()}`;
+    document.getElementById('resultsArea').style.display = 'block';
+    
+    const container = document.getElementById('recommendationsContainer');
+    container.innerHTML = '';
+    
+    if (recommendations.length === 0) {
+        container.innerHTML = `
+            <div class="alert alert-warning">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                No recommendations found matching your criteria. Try lowering the minimum score or scanning different stocks.
+            </div>
+        `;
+        return;
+    }
+    
+    recommendations.forEach((rec, index) => {
+        const card = createRecommendationCard(rec, index + 1);
+        container.appendChild(card);
+    });
+}
+
+function createRecommendationCard(rec, rank) {
+    const card = document.createElement('div');
+    card.className = 'card mb-4 shadow-sm';
+    
+    const riskReward = rec.risk_reward || {};
+    const timeline = rec.timeline || {};
+    const scoreColor = rec.overall_score >= 80 ? 'success' : rec.overall_score >= 60 ? 'warning' : 'info';
+    
+    card.innerHTML = `
+        <div class="card-header bg-${scoreColor} bg-opacity-10">
+            <div class="row align-items-center">
+                <div class="col-md-6">
+                    <h5 class="mb-0">
+                        <span class="badge bg-${scoreColor} me-2">#${rank}</span>
+                        <strong>${rec.symbol}</strong>
+                        <small class="text-muted">- ${rec.company_name}</small>
+                    </h5>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <span class="badge bg-${scoreColor} fs-6">Score: ${rec.overall_score.toFixed(1)}/100</span>
+                    <span class="badge bg-secondary ms-2">${rec.confidence} Confidence</span>
+                </div>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <!-- Price Information -->
+                <div class="col-md-3 mb-3">
+                    <h6 class="text-muted mb-2">Price Information</h6>
+                    <div class="mb-2">
+                        <strong>Current/Buy Price:</strong><br>
+                        <span class="h5 text-primary">₹${rec.buy_price.toFixed(2)}</span>
+                    </div>
+                    <div class="mb-2">
+                        <strong>Target/Sell Price:</strong><br>
+                        <span class="h5 text-success">₹${rec.target_price.toFixed(2)}</span>
+                    </div>
+                    <div class="mb-2">
+                        <strong>Stop Loss:</strong><br>
+                        <span class="h5 text-danger">₹${rec.stop_loss.toFixed(2)}</span>
+                    </div>
+                </div>
+                
+                <!-- Risk & Reward -->
+                <div class="col-md-3 mb-3">
+                    <h6 class="text-muted mb-2">Risk & Reward</h6>
+                    <div class="mb-2">
+                        <strong>Risk-Reward Ratio:</strong><br>
+                        <span class="h5 text-info">${riskReward.ratio_formatted || 'N/A'}</span>
+                    </div>
+                    <div class="mb-2">
+                        <strong>Potential Profit:</strong><br>
+                        <span class="h5 text-success">+${rec.potential_profit_percent.toFixed(2)}%</span>
+                    </div>
+                    <div class="mb-2">
+                        <strong>Risk Amount:</strong><br>
+                        <span class="h5 text-danger">-${rec.risk_percent.toFixed(2)}%</span>
+                    </div>
+                    <div class="mt-2">
+                        <span class="badge ${riskReward.is_favorable ? 'bg-success' : 'bg-warning'}">
+                            ${riskReward.recommendation || 'N/A'}
+                        </span>
+                    </div>
+                </div>
+                
+                <!-- Timeline -->
+                <div class="col-md-3 mb-3">
+                    <h6 class="text-muted mb-2">Timeline</h6>
+                    <div class="mb-2">
+                        <strong>Buy Date:</strong><br>
+                        <span class="h6">${timeline.buy_date || 'Today'}</span>
+                    </div>
+                    <div class="mb-2">
+                        <strong>Expected Sell Date:</strong><br>
+                        <span class="h6">${timeline.expected_sell_date || 'N/A'}</span>
+                    </div>
+                    <div class="mb-2">
+                        <strong>Holding Period:</strong><br>
+                        <span class="h6">${timeline.days_holding || 'N/A'} days</span>
+                    </div>
+                    <div class="mt-2">
+                        <span class="badge bg-info">${timeline.time_horizon || 'Medium term'}</span>
+                    </div>
+                </div>
+                
+                <!-- Analysis Scores -->
+                <div class="col-md-3 mb-3">
+                    <h6 class="text-muted mb-2">Analysis Scores</h6>
+                    <div class="mb-2">
+                        <small>Technical:</small>
+                        <div class="progress mb-1" style="height: 20px;">
+                            <div class="progress-bar bg-primary" style="width: ${rec.technical_score}%">${rec.technical_score.toFixed(0)}</div>
+                        </div>
+                    </div>
+                    <div class="mb-2">
+                        <small>Fundamental:</small>
+                        <div class="progress mb-1" style="height: 20px;">
+                            <div class="progress-bar bg-success" style="width: ${rec.fundamental_score}%">${rec.fundamental_score.toFixed(0)}</div>
+                        </div>
+                    </div>
+                    <div class="mb-2">
+                        <small>AI Score:</small>
+                        <div class="progress mb-1" style="height: 20px;">
+                            <div class="progress-bar bg-warning" style="width: ${rec.ai_score}%">${rec.ai_score.toFixed(0)}</div>
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <small class="text-muted">Sector: ${rec.sector}</small>
+                    </div>
+                </div>
+            </div>
+            
+            <hr>
+            
+            <div class="row">
+                <!-- Key Reasons -->
+                <div class="col-md-6">
+                    <h6 class="text-success">
+                        <i class="fas fa-check-circle me-2"></i>Key Reasons to Buy
+                    </h6>
+                    <ul class="list-group list-group-flush">
+                        ${rec.key_reasons && rec.key_reasons.length > 0 
+                            ? rec.key_reasons.map(r => `<li class="list-group-item border-0 px-0"><i class="fas fa-arrow-right text-success me-2"></i>${r}</li>`).join('')
+                            : '<li class="list-group-item border-0 px-0 text-muted">No specific reasons provided</li>'
+                        }
+                    </ul>
+                </div>
+                
+                <!-- Risks -->
+                <div class="col-md-6">
+                    <h6 class="text-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>Risks to Consider
+                    </h6>
+                    <ul class="list-group list-group-flush">
+                        ${rec.risks && rec.risks.length > 0 
+                            ? rec.risks.map(r => `<li class="list-group-item border-0 px-0"><i class="fas fa-arrow-right text-warning me-2"></i>${r}</li>`).join('')
+                            : '<li class="list-group-item border-0 px-0 text-muted">No specific risks identified</li>'
+                        }
+                    </ul>
+                </div>
+            </div>
+            
+            <hr>
+            
+            <!-- Technical Signals -->
+            <div class="row">
+                <div class="col-12">
+                    <h6 class="text-muted mb-2">Technical Signals</h6>
+                    <div class="d-flex flex-wrap gap-2">
+                        ${rec.technical_signals.rsi 
+                            ? `<span class="badge ${rec.technical_signals.rsi < 30 ? 'bg-success' : rec.technical_signals.rsi > 70 ? 'bg-danger' : 'bg-secondary'}">RSI: ${rec.technical_signals.rsi.toFixed(2)}</span>`
+                            : ''
+                        }
+                        ${rec.technical_signals.macd_signal 
+                            ? `<span class="badge ${rec.technical_signals.macd_signal === 'BUY' ? 'bg-success' : rec.technical_signals.macd_signal === 'SELL' ? 'bg-danger' : 'bg-secondary'}">MACD: ${rec.technical_signals.macd_signal}</span>`
+                            : ''
+                        }
+                        ${rec.technical_signals.trend_signal 
+                            ? `<span class="badge ${rec.technical_signals.trend_signal === 'BUY' ? 'bg-success' : rec.technical_signals.trend_signal === 'SELL' ? 'bg-danger' : 'bg-secondary'}">Trend: ${rec.technical_signals.trend_signal}</span>`
+                            : ''
+                        }
+                        ${rec.technical_signals.overall_sentiment 
+                            ? `<span class="badge ${rec.technical_signals.overall_sentiment === 'BULLISH' ? 'bg-success' : rec.technical_signals.overall_sentiment === 'BEARISH' ? 'bg-danger' : 'bg-secondary'}">Sentiment: ${rec.technical_signals.overall_sentiment}</span>`
+                            : ''
+                        }
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row mt-3">
+                <div class="col-12 text-end">
+                    <button class="btn btn-sm btn-outline-primary" onclick="analyzeStock('${rec.symbol}')">
+                        <i class="fas fa-chart-line me-1"></i>View Detailed Analysis
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    return card;
+}
+
+function analyzeStock(symbol) {
+    // Redirect to analyze page with the symbol
+    window.location.href = `/?symbol=${symbol}`;
+}
+
+function showError(message) {
+    document.getElementById('errorMessage').textContent = message;
+    document.getElementById('errorDisplay').style.display = 'block';
+}
+</script>
+{% endblock %}
+
+

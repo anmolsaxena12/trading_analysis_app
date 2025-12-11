@@ -1,0 +1,21 @@
+# Core Framework
+flask==2.3.2
+flask-cors==4.0.0
+gunicorn==21.2.0
+
+# Data & Analysis (Free - No API keys needed)
+yfinance>=0.2.66
+pandas==1.5.3
+numpy==1.24.3
+ta==0.11.0
+
+# Utilities
+requests==2.31.0
+python-dotenv==1.0.0
+plotly==5.17.0
+
+# AI Analysis (Optional - Free tier available)
+google-generativeai==0.3.2
+
+# Zerodha Integration (Optional - Only if you need portfolio features)
+kiteconnect==4.2.0

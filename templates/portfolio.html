@@ -1,0 +1,333 @@
+{% extends "base.html" %}
+
+{% block title %}Portfolio - Trading App{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="fas fa-wallet me-2"></i>Portfolio Overview</h2>
+            <button class="btn btn-primary" onclick="loadSellRecommendations()">
+                <i class="fas fa-lightbulb me-2"></i>Get Sell Recommendations
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Portfolio Summary Cards -->
+<div class="row mb-4" id="portfolioSummary">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body text-center">
+                <h5 class="card-title">Total Holdings</h5>
+                <h3 id="totalHoldings">{{ holdings|length }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body text-center">
+                <h5 class="card-title">Day Positions</h5>
+                <h3 id="totalPositions">{{ positions|length }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body text-center">
+                <h5 class="card-title">Total P&L</h5>
+                <h3 id="totalPnL">₹0.00</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body text-center">
+                <h5 class="card-title">Win Rate</h5>
+                <h3 id="winRate">0%</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Sell Recommendations -->
+<div class="row mb-4" id="sellRecommendationsSection" style="display: none;">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-exclamation-triangle me-2"></i>Sell Recommendations (1:2 Risk-Reward)
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="sellRecommendations">
+                    <!-- Recommendations will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Holdings Table -->
+{% if holdings %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-chart-pie me-2"></i>Current Holdings
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Symbol</th>
+                                <th>Quantity</th>
+                                <th>Avg Price</th>
+                                <th>Current Price</th>
+                                <th>Invested Value</th>
+                                <th>Current Value</th>
+                                <th>P&L</th>
+                                <th>P&L %</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for holding in holdings %}
+                            <tr>
+                                <td><strong>{{ holding.symbol }}</strong></td>
+                                <td>{{ holding.quantity }}</td>
+                                <td>₹{{ "%.2f"|format(holding.average_price) }}</td>
+                                <td>₹{{ "%.2f"|format(holding.current_price) }}</td>
+                                <td>₹{{ "%.2f"|format(holding.invested_value) }}</td>
+                                <td>₹{{ "%.2f"|format(holding.current_value) }}</td>
+                                <td class="{% if holding.pnl >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                    ₹{{ "%.2f"|format(holding.pnl) }}
+                                </td>
+                                <td class="{% if holding.pnl_percent >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                    {{ "%.2f"|format(holding.pnl_percent) }}%
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-primary" onclick="analyzeStock('{{ holding.symbol }}')">
+                                        <i class="fas fa-chart-line me-1"></i>Analyze
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Positions Table -->
+{% if positions %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-exchange-alt me-2"></i>Day Positions
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Symbol</th>
+                                <th>Quantity</th>
+                                <th>Avg Price</th>
+                                <th>Current Price</th>
+                                <th>P&L</th>
+                                <th>P&L %</th>
+                                <th>Product</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for position in positions %}
+                            <tr>
+                                <td><strong>{{ position.symbol }}</strong></td>
+                                <td class="{% if position.quantity > 0 %}text-success{% else %}text-danger{% endif %}">
+                                    {{ position.quantity }}
+                                </td>
+                                <td>₹{{ "%.2f"|format(position.average_price) }}</td>
+                                <td>₹{{ "%.2f"|format(position.last_price) }}</td>
+                                <td class="{% if position.pnl >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                    ₹{{ "%.2f"|format(position.pnl) }}
+                                </td>
+                                <td class="{% if position.pnl_percent >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                    {{ "%.2f"|format(position.pnl_percent) }}%
+                                </td>
+                                <td>{{ position.product }}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-primary" onclick="analyzeStock('{{ position.symbol }}')">
+                                        <i class="fas fa-chart-line me-1"></i>Analyze
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Empty State -->
+{% if not holdings and not positions %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <i class="fas fa-chart-pie fa-3x text-muted mb-3"></i>
+                <h4 class="text-muted">No Portfolio Data Available</h4>
+                <p class="text-muted">
+                    Either you don't have any holdings/positions, or the Kite API connection is not configured.
+                </p>
+                <p class="text-muted">
+                    <small>Make sure you have valid Kite API credentials in your .env file.</small>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    calculatePortfolioSummary();
+});
+
+function calculatePortfolioSummary() {
+    // Calculate totals from the table data
+    let totalPnL = 0;
+    let profitablePositions = 0;
+    let totalPositions = 0;
+
+    // Holdings
+    const holdingRows = document.querySelectorAll('tbody tr');
+    holdingRows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        if (cells.length >= 7) {
+            const pnlText = cells[6].textContent.replace('₹', '').replace(',', '');
+            const pnl = parseFloat(pnlText);
+            if (!isNaN(pnl)) {
+                totalPnL += pnl;
+                totalPositions++;
+                if (pnl > 0) profitablePositions++;
+            }
+        }
+    });
+
+    // Update summary cards
+    document.getElementById('totalPnL').textContent = `₹${totalPnL.toFixed(2)}`;
+    document.getElementById('totalPnL').className = totalPnL >= 0 ? 'text-success' : 'text-danger';
+
+    const winRate = totalPositions > 0 ? (profitablePositions / totalPositions) * 100 : 0;
+    document.getElementById('winRate').textContent = `${winRate.toFixed(1)}%`;
+}
+
+function loadSellRecommendations() {
+    const button = event.target;
+    const originalText = button.innerHTML;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Loading...';
+    button.disabled = true;
+
+    fetch('/sell-recommendations')
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                alert('Error loading recommendations: ' + data.error);
+            } else {
+                displaySellRecommendations(data);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Failed to load sell recommendations');
+        })
+        .finally(() => {
+            button.innerHTML = originalText;
+            button.disabled = false;
+        });
+}
+
+function displaySellRecommendations(data) {
+    const section = document.getElementById('sellRecommendationsSection');
+    const container = document.getElementById('sellRecommendations');
+
+    if (!data.recommendations || data.recommendations.length === 0) {
+        container.innerHTML = '<p class="text-muted">No sell recommendations at this time. Your portfolio looks good!</p>';
+        section.style.display = 'block';
+        return;
+    }
+
+    let html = `
+        <div class="mb-3">
+            <small class="text-muted">
+                Found ${data.actions_recommended} recommendations out of ${data.total_positions_analyzed} positions analyzed.
+                ${data.critical_actions > 0 ? `<span class="text-danger">${data.critical_actions} critical actions required!</span>` : ''}
+            </small>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Symbol</th>
+                        <th>Current Price</th>
+                        <th>Avg Price</th>
+                        <th>Current P&L%</th>
+                        <th>Target Price</th>
+                        <th>Stop Loss</th>
+                        <th>Action</th>
+                        <th>Priority</th>
+                        <th>Reason</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+
+    data.recommendations.forEach(rec => {
+        const priorityClass = rec.priority === 'Critical' ? 'danger' : rec.priority === 'High' ? 'warning' : 'info';
+        const actionClass = rec.action === 'SELL' ? 'danger' : rec.action === 'PARTIAL_SELL' ? 'warning' : 'info';
+
+        html += `
+            <tr>
+                <td><strong>${rec.symbol}</strong></td>
+                <td>₹${rec.current_price.toFixed(2)}</td>
+                <td>₹${rec.avg_price.toFixed(2)}</td>
+                <td class="${rec.current_pnl_percent >= 0 ? 'text-success' : 'text-danger'}">
+                    ${rec.current_pnl_percent.toFixed(2)}%
+                </td>
+                <td>₹${rec.target_price.toFixed(2)}</td>
+                <td>₹${rec.stop_loss_price.toFixed(2)}</td>
+                <td><span class="badge bg-${actionClass}">${rec.action.replace('_', ' ')}</span></td>
+                <td><span class="badge bg-${priorityClass}">${rec.priority}</span></td>
+                <td><small>${rec.reason}</small></td>
+            </tr>
+        `;
+    });
+
+    html += '</tbody></table></div>';
+
+    container.innerHTML = html;
+    section.style.display = 'block';
+}
+
+function analyzeStock(symbol) {
+    // Redirect to main page with symbol
+    window.location.href = `/?symbol=${symbol}`;
+}
+</script>
+{% endblock %}
