@@ -243,9 +243,30 @@ python app.py
 The application will be available at `http://localhost:5000`
 
 ### Production Deployment
+
+#### Local Production Testing
 ```bash
 gunicorn --bind 0.0.0.0:5000 app:app
 ```
+
+#### Free Hosting (Recommended: Render)
+See **[DEPLOYMENT.md](DEPLOYMENT.md)** for detailed free hosting guide.
+
+**Quick Deploy to Render (Easiest):**
+1. Push code to GitHub
+2. Go to [render.com](https://render.com) and sign up
+3. Create new Web Service from GitHub repo
+4. Set build command: `pip install -r requirements.txt`
+5. Set start command: `gunicorn app:app`
+6. Add environment variables
+7. Deploy! 🚀
+
+Your app will be live at: `https://your-app.onrender.com`
+
+**Other Free Options:**
+- **Railway** - $5/month credit, very easy
+- **PythonAnywhere** - Python-specific, free tier
+- See DEPLOYMENT.md for full comparison
 
 ## Usage Guide
 

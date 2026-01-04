@@ -106,7 +106,7 @@ def portfolio():
         if not portfolio_result.get('success'):
             flash('Portfolio data not available. Please check Kite API connection.', 'warning')
             return render_template('portfolio.html', holdings=[], positions=[])
-        
+
         holdings_result = agent_orchestrator.mcp_server.route_request("portfolio", {
             'action': 'get_holdings'
         })
@@ -322,4 +322,8 @@ def internal_error(error):
     return render_template('500.html'), 500
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    # For local development only
+    # Production uses gunicorn (see Procfile)
+    port = int(os.getenv('PORT', 5000))
+    debug = os.getenv('FLASK_ENV') == 'development'
+    app.run(debug=debug, host='0.0.0.0', port=port)
