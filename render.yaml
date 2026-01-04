@@ -2,8 +2,9 @@ services:
   - type: web
     name: trading-analysis-app
     env: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app
+    buildCommand: pip install --upgrade pip setuptools wheel && pip install -r requirements.txt
+    startCommand: gunicorn --bind 0.0.0.0:$PORT app:app
+    plan: free
     envVars:
       - key: FLASK_ENV
         value: production
