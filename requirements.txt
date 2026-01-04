@@ -17,5 +17,9 @@ plotly==5.17.0
 # AI Analysis (Optional - Free tier available)
 google-generativeai==0.3.2
 
+# Multi-Agent System & MCP (Model Context Protocol)
+# MCP enables agent communication and coordination
+# No additional packages needed - using custom MCP implementation
+
 # Zerodha Integration (Optional - Only if you need portfolio features)
 kiteconnect==4.2.0

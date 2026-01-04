@@ -21,12 +21,22 @@
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('index') }}">
-                            <i class="fas fa-home me-1"></i>Analyze
+                            <i class="fas fa-home me-1"></i>Home
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('analyze_stock_page') }}">
+                            <i class="fas fa-search me-1"></i>Analyze Stock
                         </a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('recommendations') }}">
                             <i class="fas fa-star me-1"></i>Buy Recommendations
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('sector_analysis') }}">
+                            <i class="fas fa-chart-pie me-1"></i>Sector Analysis
                         </a>
                     </li>
                     <li class="nav-item">

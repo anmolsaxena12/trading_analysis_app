@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+
+{% block title %}Trading Analyzer - Sector Analysis{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-primary text-white">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h3 class="card-title mb-0">
+                            <i class="fas fa-chart-pie me-2"></i>Market Overview - Sector Analysis
+                        </h3>
+                        <p class="mb-0 mt-1 small">Real-time analysis of top stocks across 5 major sectors</p>
+                    </div>
+                    <button class="btn btn-light btn-sm" id="refreshBtn" onclick="loadSectorAnalysis()">
+                        <i class="fas fa-sync-alt me-2"></i>Refresh
+                    </button>
+                </div>
+            </div>
+            <div class="card-body bg-light">
+                <div class="row text-center">
+                    <div class="col-md-3">
+                        <h5 class="text-muted mb-1">5 Sectors</h5>
+                        <p class="mb-0 small">Technology, Banking, Energy, FMCG, Automobile</p>
+                    </div>
+                    <div class="col-md-3">
+                        <h5 class="text-muted mb-1">10 Stocks</h5>
+                        <p class="mb-0 small">2 stocks per sector analyzed</p>
+                    </div>
+                    <div class="col-md-3">
+                        <h5 class="text-muted mb-1">Multi-Agent System</h5>
+                        <p class="mb-0 small">Powered by AI agents</p>
+                    </div>
+                    <div class="col-md-3">
+                        <h5 class="text-muted mb-1">Real-time Ratings</h5>
+                        <p class="mb-0 small">Buy/Sell/Neutral percentages</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Spinner -->
+<div id="loadingSpinner" class="text-center py-5" style="display: none;">
+    <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+    <p class="mt-3 h5">Analyzing stocks across sectors...</p>
+    <p class="text-muted">This may take a minute</p>
+</div>
+
+<!-- Sector Tabs -->
+<div id="sectorTabs" style="display: none;">
+    <ul class="nav nav-tabs mb-4" id="sectorTabList" role="tablist">
+        <!-- Tabs will be populated here -->
+    </ul>
+
+    <div class="tab-content" id="sectorTabContent">
+        <!-- Tab content will be populated here -->
+    </div>
+</div>
+
+<!-- Error Display -->
+<div id="errorDisplay" class="alert alert-danger" style="display: none;" role="alert">
+    <h5 class="alert-heading">Analysis Failed</h5>
+    <p id="errorMessage">An error occurred during sector analysis.</p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadSectorAnalysis();
+});
+
+function loadSectorAnalysis() {
+    document.getElementById('loadingSpinner').style.display = 'block';
+    document.getElementById('sectorTabs').style.display = 'none';
+    document.getElementById('errorDisplay').style.display = 'none';
+    document.getElementById('refreshBtn').disabled = true;
+
+    fetch('/api/sector-analysis')
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                showError(data.error);
+            } else {
+                displaySectorAnalysis(data);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showError('Network error occurred. Please try again.');
+        })
+        .finally(() => {
+            document.getElementById('loadingSpinner').style.display = 'none';
+            document.getElementById('refreshBtn').disabled = false;
+        });
+}
+
+function displaySectorAnalysis(data) {
+    const sectors = data.sectors || [];
+    
+    if (sectors.length === 0) {
+        showError('No sector data available');
+        return;
+    }
+
+    const tabList = document.getElementById('sectorTabList');
+    const tabContent = document.getElementById('sectorTabContent');
+    
+    tabList.innerHTML = '';
+    tabContent.innerHTML = '';
+
+    sectors.forEach((sector, index) => {
+        // Create tab button
+        const tabButton = document.createElement('li');
+        tabButton.className = 'nav-item';
+        tabButton.role = 'presentation';
+        const isActive = index === 0 ? 'active' : '';
+        tabButton.innerHTML = `
+            <button class="nav-link ${isActive}" id="tab-${index}" data-bs-toggle="tab" 
+                    data-bs-target="#sector-${index}" type="button" role="tab">
+                ${sector.sector_name}
+            </button>
+        `;
+        tabList.appendChild(tabButton);
+
+        // Create tab content
+        const tabPane = document.createElement('div');
+        tabPane.className = `tab-pane fade ${isActive === 'active' ? 'show active' : ''}`;
+        tabPane.id = `sector-${index}`;
+        tabPane.role = 'tabpanel';
+        
+        const stocksHtml = sector.stocks.map(stock => createStockCard(stock)).join('');
+        tabPane.innerHTML = `
+            <div class="row">
+                ${stocksHtml}
+            </div>
+        `;
+        tabContent.appendChild(tabPane);
+    });
+
+    document.getElementById('sectorTabs').style.display = 'block';
+}
+
+function createStockCard(stock) {
+    const buyPercent = stock.ratings.buy || 0;
+    const sellPercent = stock.ratings.sell || 0;
+    const neutralPercent = stock.ratings.neutral || 0;
+    
+    // Determine overall rating
+    let overallRating = 'NEUTRAL';
+    let ratingClass = 'secondary';
+    if (buyPercent > sellPercent && buyPercent > neutralPercent) {
+        overallRating = 'BUY';
+        ratingClass = 'success';
+    } else if (sellPercent > buyPercent && sellPercent > neutralPercent) {
+        overallRating = 'SELL';
+        ratingClass = 'danger';
+    }
+
+    return `
+        <div class="col-md-6 mb-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-header bg-${ratingClass} bg-opacity-10">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <strong>${stock.symbol}</strong>
+                            <small class="text-muted">- ${stock.company_name || stock.symbol}</small>
+                        </h5>
+                        <span class="badge bg-${ratingClass} fs-6">${overallRating}</span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <h6 class="text-muted mb-2">Current Price</h6>
+                        <h4 class="text-primary">₹${stock.current_price.toFixed(2)}</h4>
+                    </div>
+
+                    <div class="mb-3">
+                        <h6 class="text-muted mb-2">Rating Breakdown</h6>
+                        
+                        <!-- Buy Rating -->
+                        <div class="mb-2">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span><i class="fas fa-arrow-up text-success me-1"></i>BUY</span>
+                                <span class="fw-bold text-success">${buyPercent.toFixed(1)}%</span>
+                            </div>
+                            <div class="progress" style="height: 25px;">
+                                <div class="progress-bar bg-success" role="progressbar" 
+                                     style="width: ${buyPercent}%" 
+                                     aria-valuenow="${buyPercent}" aria-valuemin="0" aria-valuemax="100">
+                                    ${buyPercent.toFixed(1)}%
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Neutral Rating -->
+                        <div class="mb-2">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span><i class="fas fa-minus text-secondary me-1"></i>NEUTRAL</span>
+                                <span class="fw-bold text-secondary">${neutralPercent.toFixed(1)}%</span>
+                            </div>
+                            <div class="progress" style="height: 25px;">
+                                <div class="progress-bar bg-secondary" role="progressbar" 
+                                     style="width: ${neutralPercent}%" 
+                                     aria-valuenow="${neutralPercent}" aria-valuemin="0" aria-valuemax="100">
+                                    ${neutralPercent.toFixed(1)}%
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Sell Rating -->
+                        <div class="mb-2">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span><i class="fas fa-arrow-down text-danger me-1"></i>SELL</span>
+                                <span class="fw-bold text-danger">${sellPercent.toFixed(1)}%</span>
+                            </div>
+                            <div class="progress" style="height: 25px;">
+                                <div class="progress-bar bg-danger" role="progressbar" 
+                                     style="width: ${sellPercent}%" 
+                                     aria-valuenow="${sellPercent}" aria-valuemin="0" aria-valuemax="100">
+                                    ${sellPercent.toFixed(1)}%
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <small class="text-muted">Technical Score</small>
+                            <div class="h6">${stock.technical_score.toFixed(0)}/100</div>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">Fundamental Score</small>
+                            <div class="h6">${stock.fundamental_score.toFixed(0)}/100</div>
+                        </div>
+                    </div>
+
+                    <div class="d-grid">
+                        <button class="btn btn-outline-primary btn-sm" onclick="analyzeStock('${stock.symbol}')">
+                            <i class="fas fa-chart-line me-1"></i>View Detailed Analysis
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function analyzeStock(symbol) {
+    window.location.href = `/analyze-stock?symbol=${symbol}`;
+}
+
+function showError(message) {
+    document.getElementById('errorMessage').textContent = message;
+    document.getElementById('errorDisplay').style.display = 'block';
+}
+</script>
+{% endblock %}
+

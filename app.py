@@ -8,12 +8,7 @@ import traceback
 import numpy as np
 
 from utils.kite_handler import KiteHandler
-from utils.technical_analyzer import TechnicalAnalyzer
-from utils.fundamental_analyzer import FundamentalAnalyzer
-from utils.risk_manager import RiskManager
-from utils.ai_analyzer import AIAnalyzer
-from utils.portfolio_manager import PortfolioManager
-from utils.stock_scanner import StockScanner
+from agents.orchestrator import AgentOrchestrator
 
 load_dotenv()
 
@@ -23,20 +18,15 @@ CORS(app)
 
 # Initialize components
 kite_handler = None
-technical_analyzer = TechnicalAnalyzer()
-fundamental_analyzer = FundamentalAnalyzer()
-risk_manager = RiskManager()
-ai_analyzer = AIAnalyzer()
-portfolio_manager = None
+agent_orchestrator = None
 
 def initialize_handlers():
-    global kite_handler, portfolio_manager
+    global kite_handler, agent_orchestrator
     # Kite integration is OPTIONAL - app works fine without it
     # Only needed for portfolio features (holdings, positions, order placement)
     try:
         kite_handler = KiteHandler()
         if kite_handler.is_connected():
-            portfolio_manager = PortfolioManager(kite_handler)
             print("✓ Kite integration enabled - Portfolio features available")
         else:
             print("ℹ Kite not connected - Running in analysis-only mode (no portfolio features)")
@@ -44,18 +34,13 @@ def initialize_handlers():
     except Exception as e:
         print(f"ℹ Kite integration disabled: {e}")
         print("  App running in analysis-only mode - all analysis features still available!")
+    
+    # Initialize Multi-Agent Orchestrator with MCP
+    agent_orchestrator = AgentOrchestrator(kite_handler)
+    print("✓ Multi-Agent System initialized with MCP")
 
 # Initialize handlers on startup
 initialize_handlers()
-
-# Initialize stock scanner (after all analyzers are ready)
-stock_scanner = StockScanner(
-    technical_analyzer, 
-    fundamental_analyzer, 
-    ai_analyzer, 
-    risk_manager
-)
-print("✓ Stock scanner initialized - Buy recommendations available")
 
 def convert_numpy_types(obj):
     """Convert NumPy types to Python native types for JSON serialization"""
@@ -77,6 +62,12 @@ def convert_numpy_types(obj):
 
 @app.route('/')
 def index():
+    """Landing page - Sector-wise stock analysis"""
+    return render_template('sector_analysis.html')
+
+@app.route('/analyze-stock')
+def analyze_stock_page():
+    """Individual stock analysis page"""
     return render_template('index.html')
 
 @app.route('/analyze', methods=['POST'])
@@ -88,65 +79,17 @@ def analyze_stock():
         if not symbol:
             return jsonify({'error': 'Symbol is required'}), 400
 
-        # Get stock data
-        stock_data = fundamental_analyzer.get_stock_data(symbol)
-        if stock_data.empty:
-            return jsonify({'error': 'Could not fetch stock data'}), 404
-
-        # Technical Analysis
-        technical_signals = technical_analyzer.analyze(stock_data)
-
-        # Fundamental Analysis
-        fundamental_data = fundamental_analyzer.analyze(symbol)
-
-        # Current price and buying recommendation
-        current_price = stock_data['Close'].iloc[-1]
-        buying_analysis = ai_analyzer.analyze_buying_opportunity(
-            symbol, current_price, technical_signals, fundamental_data
-        )
-
-        # Portfolio analysis if available
-        portfolio_analysis = None
-        if portfolio_manager and portfolio_manager.is_connected():
-            try:
-                portfolio_analysis = portfolio_manager.get_portfolio_analysis()
-            except Exception as e:
-                print(f"Portfolio analysis error: {e}")
-
-        # Risk-reward analysis
-        if buying_analysis.get('should_buy', False):
-            risk_reward = risk_manager.calculate_risk_reward(
-                current_price,
-                buying_analysis.get('target_price', current_price * 1.1),
-                buying_analysis.get('stop_loss', current_price * 0.95)
-            )
-        else:
-            risk_reward = None
-
-        # Generate position size recommendation
-        position_recommendation = None
-        if portfolio_manager and risk_reward and buying_analysis.get('should_buy', False):
-            try:
-                available_funds = portfolio_manager.get_available_funds()
-                position_recommendation = risk_manager.calculate_position_size(
-                    available_funds, current_price, risk_reward
-                )
-            except Exception as e:
-                print(f"Position calculation error: {e}")
-
-        response = {
-            'symbol': symbol,
-            'current_price': current_price,
-            'technical_analysis': technical_signals,
-            'fundamental_analysis': fundamental_data,
-            'buying_analysis': buying_analysis,
-            'risk_reward': risk_reward,
-            'portfolio_analysis': portfolio_analysis,
-            'position_recommendation': position_recommendation,
-            'timestamp': datetime.now().isoformat()
-        }
-
-        return jsonify(response)
+        # Use Multi-Agent Orchestrator for analysis
+        result = agent_orchestrator.analyze_stock(symbol)
+        
+        if 'error' in result:
+            return jsonify(result), 500
+        
+        # Convert NumPy types for JSON serialization
+        result = convert_numpy_types(result)
+        result['timestamp'] = datetime.now().isoformat()
+        
+        return jsonify(result)
 
     except Exception as e:
         print(f"Analysis error: {traceback.format_exc()}")
@@ -155,12 +98,24 @@ def analyze_stock():
 @app.route('/portfolio')
 def portfolio():
     try:
-        if not portfolio_manager or not portfolio_manager.is_connected():
+        # Use Portfolio Agent via orchestrator
+        portfolio_result = agent_orchestrator.mcp_server.route_request("portfolio", {
+            'action': 'get_holdings'
+        })
+        
+        if not portfolio_result.get('success'):
             flash('Portfolio data not available. Please check Kite API connection.', 'warning')
             return render_template('portfolio.html', holdings=[], positions=[])
-
-        holdings = portfolio_manager.get_holdings()
-        positions = portfolio_manager.get_positions()
+        
+        holdings_result = agent_orchestrator.mcp_server.route_request("portfolio", {
+            'action': 'get_holdings'
+        })
+        positions_result = agent_orchestrator.mcp_server.route_request("portfolio", {
+            'action': 'get_positions'
+        })
+        
+        holdings = holdings_result.get('data', {}).get('holdings', []) if holdings_result.get('success') else []
+        positions = positions_result.get('data', {}).get('positions', []) if positions_result.get('success') else []
 
         return render_template('portfolio.html', holdings=holdings, positions=positions)
     except Exception as e:
@@ -172,9 +127,14 @@ def recommendations():
     """Display buy recommendations page"""
     return render_template('recommendations.html')
 
+@app.route('/sector-analysis')
+def sector_analysis():
+    """Display sector-wise stock analysis page"""
+    return render_template('sector_analysis.html')
+
 @app.route('/api/recommendations', methods=['GET', 'POST'])
 def get_recommendations():
-    """API endpoint to get buy recommendations"""
+    """API endpoint to get buy recommendations using Multi-Agent System"""
     try:
         if request.method == 'POST':
             data = request.get_json() or {}
@@ -189,20 +149,21 @@ def get_recommendations():
             if symbols:
                 symbols = [s.strip().upper() for s in symbols.split(',')]
         
-        recommendations = stock_scanner.scan_stocks(
+        # Use Multi-Agent Orchestrator for stock scanning
+        result = agent_orchestrator.scan_stocks(
             symbols=symbols,
             min_score=min_score,
             max_results=max_results
         )
         
-        # Convert NumPy types to Python native types for JSON serialization
-        recommendations = convert_numpy_types(recommendations)
+        if 'error' in result:
+            return jsonify(result), 500
         
-        return jsonify({
-            'recommendations': recommendations,
-            'count': len(recommendations),
-            'scanned_at': datetime.now().isoformat()
-        })
+        # Convert NumPy types to Python native types for JSON serialization
+        result = convert_numpy_types(result)
+        result['scanned_at'] = datetime.now().isoformat()
+        
+        return jsonify(result)
         
     except Exception as e:
         print(f"Recommendations error: {traceback.format_exc()}")
@@ -211,24 +172,143 @@ def get_recommendations():
 @app.route('/sell-recommendations')
 def sell_recommendations():
     try:
-        if not portfolio_manager or not portfolio_manager.is_connected():
-            return jsonify({'error': 'Portfolio not available'}), 503
+        # Use Portfolio Agent via orchestrator
+        result = agent_orchestrator.mcp_server.route_request("portfolio", {
+            'action': 'get_sell_recommendations'
+        })
+        
+        if not result.get('success'):
+            return jsonify({'error': result.get('error', 'Portfolio not available')}), 503
 
-        recommendations = portfolio_manager.get_sell_recommendations()
-        return jsonify(recommendations)
+        return jsonify(result.get('data', {}))
     except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/sector-analysis')
+def get_sector_analysis():
+    """Get sector-wise stock analysis using Multi-Agent System"""
+    try:
+        # Define 5 stocks from 5 different sectors
+        sector_stocks = {
+            'Technology': ['TCS', 'INFY'],
+            'Banking': ['HDFCBANK', 'ICICIBANK'],
+            'Energy': ['RELIANCE', 'ONGC'],
+            'FMCG': ['HINDUNILVR', 'ITC'],
+            'Automobile': ['MARUTI', 'TATAMOTORS']
+        }
+        
+        sectors_data = []
+        
+        for sector_name, symbols in sector_stocks.items():
+            stocks_data = []
+            
+            for symbol in symbols:
+                try:
+                    # Use orchestrator to analyze stock
+                    analysis = agent_orchestrator.analyze_stock(symbol)
+                    
+                    if 'error' not in analysis:
+                        # Calculate ratings based on signals
+                        technical = analysis.get('technical_analysis', {})
+                        buying = analysis.get('buying_analysis', {})
+                        fundamental = analysis.get('fundamental_analysis', {})
+                        
+                        # Count signals
+                        signals = technical.get('signals', {})
+                        buy_signals = sum(1 for s in signals.values() if s == 'BUY')
+                        sell_signals = sum(1 for s in signals.values() if s == 'SELL')
+                        hold_signals = sum(1 for s in signals.values() if s == 'HOLD')
+                        total_signals = buy_signals + sell_signals + hold_signals
+                        
+                        # Calculate percentages
+                        if total_signals > 0:
+                            buy_percent = (buy_signals / total_signals) * 100
+                            sell_percent = (sell_signals / total_signals) * 100
+                            neutral_percent = (hold_signals / total_signals) * 100
+                        else:
+                            # Fallback to AI analysis
+                            should_buy = buying.get('should_buy', False)
+                            confidence = buying.get('confidence_level', 'Low')
+                            
+                            if should_buy:
+                                buy_percent = 60 if confidence == 'High' else 50 if confidence == 'Medium' else 40
+                                sell_percent = 20
+                                neutral_percent = 100 - buy_percent - sell_percent
+                            else:
+                                sell_percent = 50
+                                neutral_percent = 30
+                                buy_percent = 20
+                        
+                        # Adjust based on overall sentiment
+                        sentiment = technical.get('overall_sentiment', 'NEUTRAL')
+                        if sentiment == 'BULLISH':
+                            buy_percent = min(100, buy_percent + 15)
+                            sell_percent = max(0, sell_percent - 10)
+                        elif sentiment == 'BEARISH':
+                            sell_percent = min(100, sell_percent + 15)
+                            buy_percent = max(0, buy_percent - 10)
+                        
+                        # Normalize to 100%
+                        total = buy_percent + sell_percent + neutral_percent
+                        if total > 0:
+                            buy_percent = (buy_percent / total) * 100
+                            sell_percent = (sell_percent / total) * 100
+                            neutral_percent = (neutral_percent / total) * 100
+                        
+                        stocks_data.append({
+                            'symbol': symbol,
+                            'company_name': fundamental.get('company_name', symbol),
+                            'current_price': float(analysis.get('current_price', 0)),
+                            'ratings': {
+                                'buy': float(buy_percent),
+                                'sell': float(sell_percent),
+                                'neutral': float(neutral_percent)
+                            },
+                            'technical_score': float(technical.get('overall_sentiment') == 'BULLISH' and 70 or technical.get('overall_sentiment') == 'BEARISH' and 30 or 50),
+                            'fundamental_score': float(fundamental.get('fundamental_score', {}).get('score', 50)),
+                            'overall_sentiment': sentiment
+                        })
+                except Exception as e:
+                    print(f"Error analyzing {symbol}: {e}")
+                    continue
+            
+            if stocks_data:
+                sectors_data.append({
+                    'sector_name': sector_name,
+                    'stocks': stocks_data
+                })
+        
+        # Convert NumPy types
+        sectors_data = convert_numpy_types(sectors_data)
+        
+        return jsonify({
+            'sectors': sectors_data,
+            'total_sectors': len(sectors_data),
+            'analyzed_at': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        print(f"Sector analysis error: {traceback.format_exc()}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/status')
 def api_status():
+    # Get agent status from orchestrator
+    agent_status = agent_orchestrator.get_agent_status()
+    
     status = {
         'kite_connected': kite_handler.is_connected() if kite_handler else False,
-        'portfolio_available': portfolio_manager.is_connected() if portfolio_manager else False,
+        'portfolio_available': agent_orchestrator.portfolio_agent.is_connected() if agent_orchestrator.portfolio_agent else False,
+        'mcp_server': agent_status.get('mcp_server'),
+        'total_agents': agent_status.get('total_agents'),
+        'agents': agent_status.get('agents'),
         'services': {
             'technical_analysis': True,
             'fundamental_analysis': True,
-            'ai_analysis': ai_analyzer.is_available(),
-            'risk_management': True
+            'ai_analysis': agent_orchestrator.ai_agent.ai_analyzer.is_available(),
+            'risk_management': True,
+            'stock_search': True,
+            'multi_agent_system': True
         }
     }
     return jsonify(status)
