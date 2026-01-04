@@ -10,8 +10,8 @@ gunicorn==21.2.0
 
 # Data & Analysis (Free - No API keys needed)
 yfinance>=0.2.66
-pandas==1.5.3
-numpy==1.24.3
+pandas>=1.5.3
+numpy>=1.24.3
 ta==0.11.0
 
 # Utilities

@@ -2,10 +2,13 @@ services:
   - type: web
     name: trading-analysis-app
     env: python
+    pythonVersion: "3.10.12"
     buildCommand: pip install --upgrade pip setuptools wheel && pip install -r requirements.txt
     startCommand: gunicorn --bind 0.0.0.0:$PORT app:app
     plan: free
     envVars:
+      - key: PYTHON_VERSION
+        value: "3.10.12"
       - key: FLASK_ENV
         value: production
       - key: FLASK_SECRET_KEY
