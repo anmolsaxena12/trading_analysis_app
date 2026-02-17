@@ -149,6 +149,72 @@ python app.py
 │    Agent     │ │    Agent     │ │    Agent     │
 └──────────────┘ └──────────────┘ └──────────────┘
 ```
+###FLow Diagram
+
+```
+[User Browser UI]
+        |
+        |  POST /analyze (symbol=RELIANCE)
+        v
+[Flask app.py]  ← ← ← ←  THE ORCHESTRATOR (very important)
+        |
+        |-- validate symbol
+        |
+        |-------------------- DATA COLLECTION --------------------
+        |
+        |→ (Yahoo Finance API tool)
+        |     OHLC + financials
+        |
+        v
+{Technical Analyzer Agent}
+        |
+        |-- RSI
+        |-- MACD
+        |-- moving averages
+        |-- support/resistance
+        v
+ technical signals
+
+        |
+        v
+{Fundamental Analyzer Agent}
+        |
+        |-- PE ratio
+        |-- ROE
+        |-- debt/equity
+        v
+ company quality metrics
+
+        |
+        v
+{AI Analyzer Agent}
+        |
+        |----> (Gemini LLM API)  ← THIS IS WHERE GEMINI LIVES
+        |        reasoning over signals
+        |
+        v
+ trading opinion (bullish/bearish)
+
+        |
+        v
+{Risk Manager Agent}
+        |
+        |-- position sizing
+        |-- stop loss
+        |-- target price
+        v
+ trade plan
+
+        |
+        v
+[Flask app.py aggregates]
+        |
+        v
+[HTML Template + Charts]
+        |
+        v
+[User sees recommendation]
+```
 
 ## Prerequisites
 
